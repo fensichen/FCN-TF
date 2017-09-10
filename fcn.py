@@ -12,7 +12,7 @@ class FCN(object):
         self.model = np.load( vgg_16_npy_path, encoding='latin1').item() 
         print "load vgg_16.npy" 
 
-        self.num_classes  = 1000 
+        self.num_classes  = 21
 
     def get_weight(self, name):
         
@@ -56,20 +56,21 @@ class FCN(object):
 
         if name == 'fc6':
             W = self.get_weight_fc_reshape( name, [7, 7,  512, 4096])
-        elif name == 'fc8':
-            W = self.get_weight_fc_reshape( name, [1, 1, 4096, num_classes])
-            #W = tf.Variable( tf.random_normal( [1, 1, 4096, num_classes], stddev = 0.01 ) )
+        elif name == 'score_fr':
+            name = 'fc8'
+            #W = self.get_weight_fc_reshape( name, [1, 1, 4096, num_classes])
+            W = tf.Variable( tf.random_normal( [1, 1, 4096, num_classes], stddev = 0.01 ) )
         else:
             W = self.get_weight_fc_reshape( name, [1, 1, 4096, 4096])
 
         x     = tf.nn.conv2d( x, W, [1, 1, 1, 1], padding = 'SAME' )
 
-        if name == 'fc8':
-            #b     = tf.Variable( tf.random_normal( [ num_classes], stddev = 0) )
-            b     = self.get_bias( name )
+        if name == 'score_fr':
+            b     = tf.Variable( tf.random_normal( [ num_classes], stddev = 0) )
+            #b     = self.get_bias( name )
         else:
             b     = self.get_bias( name )
-    
+        print 'x', x.shape, 'b', b.shape    
         x     = tf.nn.bias_add( x, b)
         
         return tf.nn.relu( x )
@@ -118,11 +119,10 @@ class FCN(object):
         kernel_size  = self.get_kernel_size( upscale_factor )
         stride       = upscale_factor
         strides      = [1, stride, stride, 1]
-    # data tensor: 4D tensors are usually: [BATCH, Height, Width, Channel]
+        # data tensor: 4D tensors are usually: [BATCH, Height, Width, Channel]
         n_channels   = bottom.get_shape()[-1].value
 
         with tf.variable_scope(name):
-            in_features  = bottom.get_shape()[3].value
             # shape of the bottom tensor
             in_shape     = tf.shape(bottom)
             print "in_shape", bottom.get_shape().as_list()
@@ -175,13 +175,14 @@ class FCN(object):
         self.fc6     = self.fc(self.pool5,         "fc6"    )
         self.fc7     = self.fc(self.fc6,           "fc7"    )
 
-        self.score_fr= self.fc(self.fc7,           "fc8", self.num_classes )
+        self.score_fr= self.fc(self.fc7,           "score_fr", self.num_classes )
 
         # upsampling : strided convolution
         self.result  = self.upsample_layer(self.score_fr, "up_sample", upscale_factor = 32)
 
 
 
+    
 
 
 

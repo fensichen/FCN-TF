@@ -1,6 +1,6 @@
 # FCN-TF
 
-This is a tensorflow implementation of the paper "Fully Convolutional Networks for Image Segmentation" 
+This is a tensorflow implementation of the paper [Fully Convolutional Networks for Image Segmentation](https://people.eecs.berkeley.edu/~jonlong/long_shelhamer_fcn.pdf)
 
 
 
@@ -13,7 +13,10 @@ If we define a bilinear upsampling kernel and perform fractionally strided covol
 
 The factor of up-sampling is equal to the stride of transposed convolution. The kernel of the upsampling operation is determined as  2 * factor - factor % 2 
 
-To get more information about transposed convolution, we refer to: this quide: 
-http://warmspringwinds.github.io/tensorflow/tf-slim/2016/11/22/upsampling-and-image-segmentation-with-tensorflow-and-tf-slim/
-https://github.com/vdumoulin/conv_arithmetic
-https://leonardoaraujosantos.gitbooks.io/artificial-inteligence/content/image_segmentation.html
+To get more information about transposed convolution, we refer to these guides
+[1](http://warmspringwinds.github.io/tensorflow/tf-slim/2016/11/22/upsampling-and-image-segmentation-with-tensorflow-and-tf-slim/)
+[2](https://github.com/vdumoulin/conv_arithmetic)
+[3](http://cv-tricks.com/image-segmentation/transpose-convolution-in-tensorflow/)
+
+### USAGE 
+python main.py to test the implementation
