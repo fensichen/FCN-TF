@@ -13,6 +13,7 @@ If we define a bilinear upsampling kernel and perform fractionally strided covol
 
 The factor of up-sampling is equal to the stride of transposed convolution. The kernel of the upsampling operation is determined as  2 * factor - factor % 2 
 
+
 To get more information about transposed convolution, we refer to these guides
 [1](http://warmspringwinds.github.io/tensorflow/tf-slim/2016/11/22/upsampling-and-image-segmentation-with-tensorflow-and-tf-slim/)
 [2](https://github.com/vdumoulin/conv_arithmetic)
