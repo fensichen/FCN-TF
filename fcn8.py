@@ -9,10 +9,12 @@ kittiSeg_pretrained_path = '/home/fensi/nas/KittiSeg_pretrained/model.ckpt-15999
 
 class FCN(object):
     # load model
-    def __init__(self, model_path = kittiSeg_pretrained_path):
+    def __init__(self, model_path = kittiSeg_pretrained_path, num_classes = 2, batch_size = 16 ):
         
         self.model        = np.load( model_path, encoding='latin1').item() 
-        self.num_classes  = 2
+        self.num_classes  = num_classes
+        self.batch_size   = batch_size
+        
 
     def get_weight(self, name):
         """
@@ -51,7 +53,7 @@ class FCN(object):
         """
         return tf.nn.max_pool( x, ksize= [1, 2, 2, 1],  strides = [1, 2, 2, 1], padding = 'SAME')
 
-    def get_weight_fc_reshape(self, name, shape_, num_classes = None ):
+    def get_weight_fc_reshape(self, name, shape_):
         """
         reshape the pretrained fc weight into new shape (shape_)
         """
@@ -62,7 +64,7 @@ class FCN(object):
         return weight_
 
    
-    def fc(self, x, name, num_classes = None ):
+    def fc(self, x, name ):
         """
         Transform fully connected layer to convolution layer by first reshaping the (pretrained) weight kernel, 
         then convoluting the input tensor using the reshaped kernel 
@@ -71,7 +73,7 @@ class FCN(object):
             if name == 'fc6':
                 W = self.get_weight_fc_reshape( name, [7, 7,  512, 4096])
             elif name == 'score_fr':
-                W = self.get_weight_fc_reshape( name, [1, 1, 4096, num_classes])
+                W = self.get_weight_fc_reshape( name, [1, 1, 4096, self.num_classes])
             else:
                 W = self.get_weight_fc_reshape( name, [1, 1, 4096, 4096])
 
@@ -131,10 +133,12 @@ class FCN(object):
         with tf.variable_scope(name) as scope:
             # shape of the bottom tensor
             if shape is None:
-                in_shape     = tf.shape(bottom)            
+                in_shape     = tf.shape(bottom) 
+                print "in_shape", in_shape.get_shape().as_list           
                 h            = ( ( in_shape[1] - 1 ) * stride ) + 1
                 w            = ( ( in_shape[2] - 1 ) * stride ) + 1
                 new_shape    = [ in_shape[0], h, w, n_channels]
+
             else:
                 new_shape    = [shape[0], shape[1], shape[2], shape[3]]
 
@@ -144,34 +148,33 @@ class FCN(object):
             deconv       = tf.nn.conv2d_transpose(bottom, weights_, output_shape, strides = strides, padding= 'SAME')
             return deconv
 
-    def score_layer ( self, bottom, name, num_classes = None):
+    def score_layer ( self, bottom, name):
         """
-        We append a 1 × 1 convolution with channel dimension num_classes to predict scores for each class (including background) at each of the coarse output locations
+        append 1x1 convolution with channel dimension for each class at each of the coarse output location
         """
         with tf.variable_scope( name ) as scope:
             in_channels  = bottom.get_shape()[3].value # the channel of input tensor
-            shape        = [ 1, 1, in_channels, num_classes ] # define the shape of convolution kernel
+            shape        = [ 1, 1, in_channels, self.num_classes ] # define the shape of convolution kernel
             W            = self.get_weight(name)
             b            = self.get_bias(name)
             conv         = tf.nn.conv2d( bottom, W, [ 1, 1, 1, 1], padding = 'SAME')
             x            = tf.nn.bias_add( conv, b ) 
             return x 
 
-    # build the VGG model using
-    def build_vgg_net(self, img ):
+    def build_seg_net(self, img ):
         """
-        Build VGG using pre-trained weight parameters, followed by a deconvolution layer to bilinearly upsample the coarse outputs to pixel-dense outputs. 
+        Build Seg-Net using pre-trained weight parameters, followed by a deconvolution layer to bilinearly upsample the coarse outputs to pixel-dense outputs. 
         """
 
         # Q: convert rgb to bgr (?) 
         self.conv1_1     = self.conv2d(img,            "conv1_1")
         self.conv1_2     = self.conv2d(self.conv1_1,   "conv1_2")
-        self.pool1       = self.max_pool(self.conv1_2, "pool1"  )
-
+        self.pool1       = self.max_pool(self.conv1_2, "pool1"  )   
+       
         self.conv2_1     = self.conv2d(self.pool1,     "conv2_1")
         self.conv2_2     = self.conv2d(self.conv2_1,   "conv2_2")
         self.pool2       = self.max_pool(self.conv2_2, "pool2"  )
-
+       
         self.conv3_1     = self.conv2d(self.pool2,     "conv3_1")
         self.conv3_2     = self.conv2d(self.conv3_1,   "conv3_2")
         self.conv3_3     = self.conv2d(self.conv3_2,   "conv3_3")
@@ -190,25 +193,54 @@ class FCN(object):
         # fully conv 
         self.fc6         = self.fc(self.pool5,         "fc6"    )
         self.fc7         = self.fc(self.fc6,           "fc7"    )
-        self.score_fr    = self.fc(self.fc7,           "score_fr", self.num_classes )
-
+        self.score_fr    = self.fc(self.fc7,           "score_fr" )
         # upsampling : strided convolution
-        self.score_pool4 = self.score_layer( self.pool4, "score_pool4", self.num_classes)
-        self.upscore2    = self.upsample_layer(self.score_fr, "upscore2", 2, self.score_pool4.shape ) # Q: why not conv7 as in the paper?  
+        self.score_pool4 = self.score_layer( self.pool4, "score_pool4")
+        self.upscore2    = self.upsample_layer(self.score_fr, "upscore2", 2, self.score_pool4.get_shape().as_list() ) # Q: why not conv7 as in the paper?  
         self.fuse_pool4  = tf.add( self.upscore2, self.score_pool4)
-
-        self.score_pool3 = self.score_layer( self.pool3, "score_pool3", self.num_classes)
-        self.upscore4    = self.upsample_layer( self.fuse_pool4, "upscore4", 2, self.score_pool3.shape)
+       
+        self.score_pool3 = self.score_layer( self.pool3, "score_pool3")
+        self.upscore4    = self.upsample_layer( self.fuse_pool4, "upscore4", 2, self.score_pool3.get_shape().as_list() )
         self.fuse_pool3  = tf.add( self.upscore4, self.score_pool3)
-
-        self.upscore32   = self.upsample_layer( self.fuse_pool3, "upscore32", 8, None )
-
+       
+        imgshape         = img.get_shape().as_list()
+        target_shape     = [ self.batch_size, imgshape[1], imgshape[2], self.num_classes ]
+        self.upscore32   = self.upsample_layer( self.fuse_pool3, "upscore32", 8, target_shape ) # 8x upsampled prediction
+       
         self.result      = self.upscore32 
         
 
+    def train_op(self):
+        optimizer        = tf.train.AdamOptimizer( 1e-3 )
+        train_op         = optimizer.minimize( self.loss_op)
+        return train_op
+        
 
-
-    
+    def loss_op(self, logits, labels):
+        """     
+        Args: 
+            logits: tensor, float        - [ batch_size, width, height, num_classes ]
+            labels: labels tensor, int32 - [ batch_size, width, height, num_classes ]
+        Returns
+            loss: 
+        """
+        # If logits is B x D x C, then sparse labels: B x D, normal labels: B x D x C
+        logits = tf.reshape( logits, [self.batch_size, -1, self.num_classes] ) 
+        # --> to make it as BxDxC (?), where D = width * height * channels  
+        
+        # Make sure logits has dimension D+1 (for labels dimension D)
+        print "logits.shape", logits.get_shape().as_list()
+        print "labels.shape", labels.shape
+        #loss_op         = tf.nn.sparse_softmax_cross_entropy_with_logits( logits = logits, labels = labels )
+        loss_op         = tf.nn.softmax_cross_entropy_with_logits( logits = logits, labels = labels )
+        
+        # If we have B x D x 1
+        loss_op         = tf.reduce_sum( loss_op, axis = 1 )
+        # --> B x 1
+        loss_op         = tf.reduce_mean( loss_op )
+        # --> 1
+        self.loss_op    = loss_op
+        return loss_op
 
 
 

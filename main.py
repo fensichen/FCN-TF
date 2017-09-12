@@ -32,12 +32,12 @@ def visualize( data ):
 
 BATCH=1
 
-img_in  = scp.misc.imread('/home/fensi/nas/data_road/training/image_2/um_000000.png')
+img_in  = scp.misc.imread('/home/fensi/nas/KITTI_ROAD/training/image_2/um_000000.png')
 
 fcn_net = fcn8.FCN()
 fcn_net.num_classes = num_class
 image   = tf.placeholder(tf.float32,  [BATCH, img_in.shape[0], img_in.shape[1], img_in.shape[2]] )
-fcn_net.build_vgg_net(image)    
+fcn_net.build_seg_net(image)    
 
 saver = tf.train.Saver()
 
@@ -51,6 +51,7 @@ with tf.Session() as sess:
     init     = tf.global_variables_initializer()
     sess.run(init)
     img_in   = np.expand_dims( img_in, axis = 0)
+    print "img_in.shape", img_in.shape
     res = sess.run( fcn_net.result, feed_dict={image : img_in } )
     print res.shape
     out = np.argmax(res, axis = 3) 

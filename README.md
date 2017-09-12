@@ -21,3 +21,7 @@ To get more information about transposed convolution, we refer to these guides
 
 ### USAGE 
 python main.py to test the implementation
+
+### Result
+
+### Obeservation
