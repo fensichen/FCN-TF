@@ -88,4 +88,5 @@ with tf.Session( config = conf) as sess:
             feed                   = { images : image_batch } 
             res                    = sess.run( fcn_net.result, feed_dict=feed )
             print res
+            res                    = res + [ 123.68, 116.779, 103.939]
             visualize( res )
